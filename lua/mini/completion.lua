@@ -395,6 +395,7 @@ MiniCompletion.completefunc_lsp = function(findstart, base)
 
       H.completion.lsp.status = 'received'
       H.completion.lsp.result = result
+      -- put({ 'MiniCompletion > textDocument/completion > result:', result })
 
       -- Trigger LSP completion to take 'received' route
       H.trigger_lsp()
@@ -868,12 +869,22 @@ H.lsp_completion_response_items_to_complete_items = function(items, client_id)
     if not info and type(docs) == 'string' then info = docs end
     info = info or ''
 
+    local label_details = item.labelDetails and item.labelDetails.description or ''
+    if label_details ~= '' then
+      local truncate_len = 40
+      if #label_details > truncate_len then
+        label_details = string.sub(label_details, (-1 * truncate_len))
+        label_details = '...' .. label_details
+      end
+      label_details = '@[' .. label_details .. ']'
+    end
+
     table.insert(res, {
       word = H.get_completion_word(item),
       abbr = item.label,
       kind = item_kinds[item.kind] or 'Unknown',
       kind_hlgroup = item.kind_hlgroup,
-      menu = item.detail or '',
+      menu = label_details or '',
       info = info,
       icase = 1,
       dup = 1,
@@ -954,8 +965,27 @@ H.show_info_window = function()
   local lines
   if H.info.lsp.status == 'received' then
     lines = H.process_lsp_response(H.info.lsp.result, function(response)
-      if not response.documentation then return {} end
-      local res = vim.lsp.util.convert_input_to_markdown_lines(response.documentation)
+      local final_docs = response.documentation
+      if not response.documentation then
+        final_docs = {
+          kind = 'markdown',
+          value = '',
+        }
+      end
+
+      local docs_detail = response.detail or ''
+      if docs_detail ~= '' then
+        if final_docs.value == '' or final_docs.value == nil then
+          final_docs.value = docs_detail
+        else
+          final_docs.value = docs_detail .. '\n---\n' .. final_docs.value
+        end
+      end
+      if final_docs.value == '' or final_docs.value == nil or not final_docs.value then
+        final_docs.value = 'No documentation available.'
+      end
+
+      local res = vim.lsp.util.convert_input_to_markdown_lines(final_docs)
       return H.normalize_lines(res)
     end)
 
@@ -1027,6 +1057,7 @@ H.info_window_lines = function(info_id)
   local cancel_fun = vim.lsp.buf_request_all(bufnr, 'completionItem/resolve', params, function(result)
     -- Don't do anything if there is other LSP request in action
     if not H.is_lsp_current(H.info, current_id) then return end
+    -- put({ 'MiniCompletion > completionItem/resolve > result:', result })
 
     H.info.lsp.status = 'received'
 
