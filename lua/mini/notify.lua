@@ -1,3 +1,7 @@
+-- IMPORTANT: spm customization
+-- 'Diagnosing' is the annoying repeated notification we get often when typing in Lua file
+local ignore_progress_title = { 'Diagnosing' }
+
 --- *mini.notify* Show notifications
 --- *MiniNotify*
 ---
@@ -656,8 +660,10 @@ H.lsp_progress_handler = function(err, result, ctx, config)
   -- Delay removal to not cause flicker.
   if value.kind == 'end' then
     H.lsp_progress[lsp_progress_id] = nil
+    if not vim.tbl_contains(ignore_progress_title, progress_data.title) then
     local delay = math.max(lsp_progress_config.duration_last, 0)
     vim.defer_fn(function() MiniNotify.remove(progress_data.notif_id) end, delay)
+    end
     return
   end
 
@@ -671,10 +677,12 @@ H.lsp_progress_handler = function(err, result, ctx, config)
     client_name, progress_data.title or '', value.message or '', progress_data.percentage
   )
 
+  if not vim.tbl_contains(ignore_progress_title, progress_data.title) then
   if progress_data.notif_id == nil then
     progress_data.notif_id = MiniNotify.add(msg)
   else
     MiniNotify.update(progress_data.notif_id, { msg = msg })
+  end
   end
 
   -- Cache progress data
